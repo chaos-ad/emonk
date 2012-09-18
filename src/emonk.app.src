@@ -1,13 +1,12 @@
 %% -*- erlang -*-
-{application, emonk,
- [
-  {description, "Emonk - JavaScript bindings for Erlang"},
-  {vsn, git},
-  {registered, []},
-  {applications, [
-                  kernel,
-                  stdlib
-                 ]},
-  {mod, { emonk_app, []}},
-  {env, []}
- ]}.
+{application, emonk, [
+    {description, "Emonk - JavaScript bindings for Erlang"},
+    {vsn, git},
+    {registered, []},
+    {applications, [
+        kernel,
+        stdlib
+    ]},
+    {mod, {emonk_app, []}},
+    {env, []}
+]}.

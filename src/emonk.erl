@@ -62,7 +62,3 @@ call(Pid, Fun, Args, Timeout) ->
     emonk_vm:call(Pid, Fun, Args, Timeout).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-test(Args) ->
-    io:format("Callback hit the erlang! Args = ~p~n", [Args]),
-    {ok, {tha_tuple, <<"binary">>, [{<<"key">>,<<"value">>}]}, []}.

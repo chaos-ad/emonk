@@ -31,7 +31,7 @@ Hopefully the build scenario is something like:
     $ git clone git://github.com/davisp/emonk.git
     $ cd emonk
     $ make
-    $ make check
+    $ make test
 
 Running
 -------
