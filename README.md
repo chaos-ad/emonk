@@ -1,4 +1,5 @@
-My fork of emonk library, in which I fix stuff for my own good
+My fork of emonk library, in which I fix stuff for my own good.  
+Original can be found here: http://github.com/davisp/emonk/
 
 emonk - Accidentally Refactored erlang_js
 =========================================
