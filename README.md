@@ -1,3 +1,5 @@
+My fork of emonk library, in which I fix stuff for my own good
+
 emonk - Accidentally Refactored erlang_js
 =========================================
 
@@ -38,14 +40,10 @@ I've been using [etap][etap] to test as I code. Its awesome. You should use it.
 That said, running is pretty cake assuming emonk is on your Erlang code path:
 
     $ ERL_LIBS=~/awesome_projects/emonk/src erl -s emonk
-    1> {ok, Context} = emonk:create_ctx().
-    {ok, <<>>} % Note: The <<>> here is *not* an empty binary. Its a resource.
-    2> emonk:eval(Context, <<"var f = 2; f*3;">>).
-    {ok, 6}
-    3> emonk:eval(Context, <<"var g = function(x) {return x*4;};">>).
-    {ok, undefined}
-    4> emonk:call(Context, <<"g">>, [9]).
-    {ok, 36}
+    {ok, Context} = emonk:start_vm().
+    {ok, 6} = emonk:eval(Context, <<"var f = 2; f*3;">>).
+    {ok, undefined} = emonk:eval(Context, <<"var g = function(x) {return x*4;};">>).
+    {ok, 36} = emonk:call(Context, <<"g">>, [9]).
 
 [etap]: http://github.com/ngerakines/etap
 

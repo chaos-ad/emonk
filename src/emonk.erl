@@ -1,99 +1,68 @@
-% This file is part of Emonk released under the MIT license. 
-% See the LICENSE file for more information.
-
 -module(emonk).
--on_load(init/0).
 
+-export([start/0, stop/0]).
+-export([start_vm/0, start_vm/1, stop_vm/1]).
 
--export([create_ctx/0, create_ctx/1]).
--export([eval/2, eval/3, call/3, call/4, send/3, send/4]).
+-export([eval/2, eval/3]).
+-export([call/3, call/4]).
 
+-export([test/1]).
 
--define(APPNAME, emonk).
--define(LIBNAME, emonk).
--define(CTX_STACK, 8192).
--define(TIMEOUT, infinity).
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-create_ctx() ->
-    create_ctx(?CTX_STACK).
+start() ->
+    start(?MODULE).
 
-create_ctx(_) ->
-    not_loaded(?LINE).
+start(App) ->
+    start_ok(App, application:start(App, permanent)).
 
+stop() ->
+    application:stop(?MODULE).
 
-eval(Ctx, Script) ->
-    eval(Ctx, Script, ?TIMEOUT).
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-eval(Ctx, Script, Timeout) ->
-    Ref = make_ref(),
-    ok = eval(Ctx, Ref, self(), Script),
-    receive
-        {Ref, Resp} ->
-            Resp;
-        {message, Resp} ->
-            {message, Ref, Resp};
-        Other ->
-            throw(Other)
-    after Timeout ->
-        throw({error, timeout, Ref})
-    end.
+start_ok(_, ok) ->
+    ok;
 
-eval(_Ctx, _Ref, _Dest, _Script) ->
-    not_loaded(?LINE).
+start_ok(_, {error, {already_started, _App}}) ->
+    ok;
 
+start_ok(App, {error, {not_started, Dep}}) when App =/= Dep ->
+    ok = start(Dep),
+    start(App);
 
-call(Ctx, Name, Args) ->
-    call(Ctx, Name, Args, ?TIMEOUT).
+start_ok(App, {error, Reason}) ->
+    erlang:error({app_start_failed, App, Reason}).
 
-call(Ctx, Name, Args, Timeout) ->
-    Ref = make_ref(),
-    ok = call(Ctx, Ref, self(), Name, Args),
-    receive
-        {Ref, Resp} ->
-            Resp;
-        {message, Resp} ->
-            {message, Ref, Resp}
-    after Timeout ->
-        throw({error, timeout, Ref})
-    end.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-call(_Ctx, _Ref, _Dest, _Name, _Args) ->
-    not_loaded(?LINE).
+start_vm() ->
+    start_vm([]).
 
-send(_Ctx, _Data) ->
-    not_loaded(?LINE).
+start_vm(Options) ->
+    emonk_sup:start_child([Options]).
 
-send(Ctx, Ref, Data) ->
-    send(Ctx, Ref, Data, ?TIMEOUT).
+stop_vm(Pid) ->
+    emonk_sup:stop_child(Pid).
 
-send(Ctx, Ref, Data, Timeout) ->
-    ok = send(Ctx, Data),
-    receive
-        {Ref, Resp} ->
-            Resp;
-        {message, Resp} ->
-            {message, Resp}
-    after Timeout ->
-        throw({error, timeout, Ref})
-    end.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+eval(Pid, Code) ->
+    eval(Pid, Code, infinity).
 
-%% Internal API
+eval(Pid, Code, Timeout) ->
+    emonk_vm:eval(Pid, Code, Timeout).
 
-init() ->
-    SoName = case code:priv_dir(?APPNAME) of
-        {error, bad_name} ->
-            case filelib:is_dir(filename:join(["..", priv])) of
-                true ->
-                    filename:join(["..", priv, ?LIBNAME]);
-                _ ->
-                    filename:join([priv, ?LIBNAME])
-            end;
-        Dir ->
-            filename:join(Dir, ?LIBNAME)
-    end,
-    erlang:load_nif(SoName, 0).
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+call(Pid, Fun, Args) ->
+    call(Pid, Fun, Args, infinity).
 
-not_loaded(Line) ->
-    exit({not_loaded, [{module, ?MODULE}, {line, Line}]}).
+call(Pid, Fun, Args, Timeout) ->
+    emonk_vm:call(Pid, Fun, Args, Timeout).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+test(Args) ->
+    io:format("Callback hit the erlang! Args = ~p~n", [Args]),
+    {ok, {tha_tuple, <<"binary">>, [{<<"key">>,<<"value">>}]}, []}.

@@ -13,6 +13,7 @@
 #define MAX_BYTES 8388608
 #define MAX_MALLOC_BYTES 8388608
 #define MAX_WORKERS 64
+#define STACK_SIZE 8192
 
 struct state_t
 {
@@ -25,7 +26,7 @@ struct state_t
 typedef struct state_t* state_ptr;
 
 static int
-load(ErlNifEnv* env, void** priv, ENTERM load_info)
+init(ErlNifEnv* env, void** priv, ENTERM load_info)
 {
     ErlNifResourceType* res;
     state_ptr state = (state_ptr) enif_alloc(sizeof(struct state_t));
@@ -52,9 +53,9 @@ load(ErlNifEnv* env, void** priv, ENTERM load_info)
     if(state->runtime == NULL) goto error;
     JS_SetGCParameter(state->runtime, JSGC_MAX_BYTES, MAX_BYTES);
     JS_SetGCParameter(state->runtime, JSGC_MAX_MALLOC_BYTES, MAX_MALLOC_BYTES);
-    
+
     *priv = (void*) state;
-    
+
     return 0;
 
 error:
@@ -68,7 +69,7 @@ error:
 }
 
 static void
-unload(ErlNifEnv* env, void* priv)
+terminate(ErlNifEnv* env, void* priv)
 {
     state_ptr state = (state_ptr) priv;
     if(state->lock != NULL) enif_mutex_destroy(state->lock);
@@ -77,24 +78,24 @@ unload(ErlNifEnv* env, void* priv)
 }
 
 static ENTERM
-create_ctx(ErlNifEnv* env, int argc, CENTERM argv[])
+start(ErlNifEnv* env, int argc, CENTERM argv[])
 {
     state_ptr state = (state_ptr) enif_priv_data(env);
-    unsigned int stack_size;
     vm_ptr vm;
     ENTERM ret;
+    ENPID pid;
 
-    if(argc != 1 || !enif_get_uint(env, argv[0], &stack_size))
+    if(argc != 1 || !enif_get_local_pid(env, argv[1], &pid))
     {
         return enif_make_badarg(env);
     }
 
-    vm = vm_init(state->res_type, state->runtime, (size_t) stack_size);
+    vm = vm_init(state->res_type, state->runtime, STACK_SIZE, pid);
     if(vm == NULL) return util_mk_error(env, "vm_init_failed");
-    
+
     ret = enif_make_resource(env, vm);
     enif_release_resource(vm);
-    
+
     return util_mk_ok(env, ret);
 }
 
@@ -103,36 +104,22 @@ eval(ErlNifEnv* env, int argc, CENTERM argv[])
 {
     state_ptr state = (state_ptr) enif_priv_data(env);
     vm_ptr vm;
-    ENPID pid;
     ENBINARY bin;
 
-    if(argc != 4) return enif_make_badarg(env);
-    
+    if(argc != 2) return enif_make_badarg(env);
+
     if(!enif_get_resource(env, argv[0], state->res_type, (void**) &vm))
     {
         return enif_make_badarg(env);
     }
-
-    if(!enif_is_ref(env, argv[1]))
-    {
-        return util_mk_error(env, "invalid_ref");
-    }
-
-    if(!enif_get_local_pid(env, argv[2], &pid))
-    {
-        return util_mk_error(env, "invalid_pid");
-    }
-    
-    if(!enif_inspect_binary(env, argv[3], &bin))
+    if(!enif_inspect_binary(env, argv[1], &bin))
     {
         return util_mk_error(env, "invalid_script");
     }
-    
-    if(!vm_add_eval(vm, argv[1], pid, bin))
+    if(!vm_add_eval(vm, bin))
     {
         return util_mk_error(env, "error_creating_job");
     }
-    
     return util_mk_atom(env, "ok");
 }
 
@@ -141,70 +128,55 @@ call(ErlNifEnv* env, int argc, CENTERM argv[])
 {
     state_ptr state = (state_ptr) enif_priv_data(env);
     vm_ptr vm;
-    ENPID pid;
 
-    if(argc != 5) return enif_make_badarg(env);
-    
+    if(argc != 3) return enif_make_badarg(env);
+
     if(!enif_get_resource(env, argv[0], state->res_type, (void**) &vm))
     {
         return enif_make_badarg(env);
     }
-
-    if(!enif_is_ref(env, argv[1]))
-    {
-        return util_mk_error(env, "invalid_ref");
-    }
-
-    if(!enif_get_local_pid(env, argv[2], &pid))
-    {
-        return util_mk_error(env, "invalid_pid");
-    }
-    
-    if(!enif_is_binary(env, argv[3]))
+    if(!enif_is_binary(env, argv[1]))
     {
         return util_mk_error(env, "invalid_name");
     }
-    
-    if(!enif_is_list(env, argv[4]))
+    if(!enif_is_list(env, argv[2]))
     {
         return util_mk_error(env, "invalid_args");
     }
-    
-    if(!vm_add_call(vm, argv[1], pid, argv[3], argv[4]))
+    if(!vm_add_call(vm, argv[1], argv[2]))
     {
         return util_mk_error(env, "error_creating_job");
     }
-    
     return util_mk_atom(env, "ok");
 }
 
 static ENTERM
-send(ErlNifEnv* env, int argc, CENTERM argv[])
+result(ErlNifEnv* env, int argc, CENTERM argv[])
 {
     state_ptr state = (state_ptr) enif_priv_data(env);
     vm_ptr vm;
 
-    if(argc != 2) return enif_make_badarg(env);
-    
+    if(argc != 2)
+    {
+        return enif_make_badarg(env);
+    }
     if(!enif_get_resource(env, argv[0], state->res_type, (void**) &vm))
     {
         return enif_make_badarg(env);
     }
-
-    if(!vm_send(vm, argv[1]))
+    if(!vm_add_result(vm, argv[1]))
     {
-        return util_mk_error(env, "error_sending_response");
+        return util_mk_error(env, "error_creating_job");
     }
-    
     return util_mk_atom(env, "ok");
 }
 
 static ErlNifFunc nif_funcs[] = {
-    {"create_ctx", 1, create_ctx},
-    {"eval", 4, eval},
-    {"call", 5, call},
-    {"send", 2, send}
+    {"start", 1, start},
+    {"eval", 2, eval},
+    {"call", 3, call},
+    {"result", 2, result}
 };
 
-ERL_NIF_INIT(emonk, nif_funcs, &load, NULL, NULL, unload);
+ERL_NIF_INIT(emonk_nif, nif_funcs, &init, NULL, NULL, terminate);
 

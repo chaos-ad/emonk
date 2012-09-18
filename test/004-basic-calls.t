@@ -4,10 +4,12 @@
 % See the LICENSE file for more information.
 
 main(_) ->
-    test_util:run(10, fun() -> test() end).
+    emonk:start(),
+    test_util:run(10, fun() -> test() end),
+    emonk:stop().
 
 test() ->
-    {ok, Ctx} = emonk:create_ctx(),
+    {ok, Ctx} = emonk:start_vm(),
 
     test_eval_ok(Ctx),
     test_call_ok(Ctx),

@@ -1,12 +1,14 @@
 #! /usr/bin/env escript
-% This file is part of Emonk released under the MIT license. 
-% See the LICENSE file for more information.
+%%! -pa ebin -s emonk
+
+%% This file is part of Emonk released under the MIT license.
+%% See the LICENSE file for more information.
 
 main([]) ->
     run().
 
 do_context(Script) ->
-    {ok, Ctx} = emonk:create_ctx(),
+    {ok, Ctx} = emonk:start_vm(),
     emonk:eval(Ctx, <<"var process={};var f = ", Script/binary, " f(process);">>),
     {ok, Resp} = emonk:eval(Ctx, <<"process.add_message('test');process.next_message();">>),
     <<"test">> = Resp.

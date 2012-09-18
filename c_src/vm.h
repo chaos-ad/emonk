@@ -11,11 +11,11 @@
 
 typedef struct vm_t* vm_ptr;
 
-vm_ptr vm_init(ErlNifResourceType* res_type, JSRuntime* runtime, size_t stack_size);
+vm_ptr vm_init(ErlNifResourceType* res_type, JSRuntime* runtime, size_t stack_size, ENPID pid);
 void vm_destroy(ErlNifEnv* env, void* obj);
 
-int vm_add_eval(vm_ptr vm, ENTERM ref, ENPID pid, ENBINARY bin);
-int vm_add_call(vm_ptr vm, ENTERM ref, ENPID pid, ENTERM name, ENTERM args);
-int vm_send(vm_ptr vm, ENTERM data);
+int vm_add_eval(vm_ptr vm, ENBINARY bin);
+int vm_add_call(vm_ptr vm, ENTERM name, ENTERM args);
+int vm_add_result(vm_ptr vm, ENTERM data);
 
 #endif // Included vm.h

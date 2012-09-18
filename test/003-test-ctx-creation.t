@@ -5,7 +5,9 @@
 
 
 main([]) ->
-    test_util:run(100, fun() -> test() end).
+    emonk:start(),
+    test_util:run(100, fun() -> test() end),
+    emonk:stop().
 
 test() ->
     lists:foreach(fun(_) -> test_vm_creation() end, lists:seq(1, 100, 1)),
@@ -14,7 +16,7 @@ test() ->
 test_vm_creation() ->
     etap:fun_is(
         fun({ok, _}) -> true; (_) -> false end,
-        emonk:create_ctx(),
+        emonk:start_vm(),
         "Created a context successfully."
     ),
     erlang:garbage_collect().

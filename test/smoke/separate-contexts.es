@@ -1,6 +1,8 @@
 #! /usr/bin/env escript
-% This file is part of Emonk released under the MIT license. 
-% See the LICENSE file for more information.
+%%! -pa ebin -s emonk
+
+%% This file is part of Emonk released under the MIT license.
+%% See the LICENSE file for more information.
 
 main([]) ->
     start(64, 1000);
@@ -19,7 +21,7 @@ start(N, M) ->
 run(0, _) ->
     ok;
 run(N, M) ->
-    {ok, Ctx} = emonk:create_ctx(),
+    {ok, Ctx} = emonk:start_vm(),
     {ok, undefined} = emonk:eval(Ctx, js()),
     Self = self(),
     Pid = spawn(fun() -> do_js(Self, Ctx, M) end),

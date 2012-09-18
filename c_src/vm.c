@@ -14,7 +14,7 @@ typedef enum
     job_close,
     job_eval,
     job_call,
-    job_response
+    job_result
 } job_type_e;
 
 struct job_t
@@ -22,9 +22,7 @@ struct job_t
     job_type_e      type;
 
     ErlNifEnv*      env;
-    ENTERM          ref;
-    ErlNifPid       pid;
-    
+
     ErlNifBinary    script;
     ENTERM          name;
     ENTERM          args;
@@ -36,6 +34,7 @@ typedef struct job_t* job_ptr;
 
 struct vm_t
 {
+    ENPID               pid;
     ErlNifTid           tid;
     ErlNifThreadOpts*   opts;
     JSRuntime*          runtime;
@@ -65,7 +64,7 @@ ENTERM vm_call(JSContext* cx, JSObject* gl, job_ptr job);
 void vm_report_error(JSContext* cx, const char* mesg, JSErrorReport* report);
 ENTERM vm_mk_ok(ErlNifEnv* env, ENTERM reason);
 ENTERM vm_mk_error(ErlNifEnv* env, ENTERM reason);
-ENTERM vm_mk_message(ErlNifEnv* env, ENTERM data);
+ENTERM vm_mk_callback(ErlNifEnv* env, ENTERM data);
 
 // Job constructor and destructor
 
@@ -79,7 +78,6 @@ job_create()
     ret->env = enif_alloc_env();
     if(ret->env == NULL) goto error;
 
-    ret->ref = 0;
     ret->script.data = NULL;
     ret->script.size = 0;
     ret->error = 0;
@@ -118,12 +116,12 @@ static JSClass jserl_class = {
 };
 
 static JSBool
-jserl_send(JSContext* cx, uintN argc, jsval* vp)
+jserl_call(JSContext* cx, uintN argc, jsval* vp)
 {
     vm_ptr vm = (vm_ptr) JS_GetContextPrivate(cx);
     ErlNifEnv* env;
     job_ptr job;
-    ENTERM mesg;
+    ENTERM callback;
     jsval* argv = JS_ARGV(cx, vp);
     
     if(argc < 0)
@@ -134,11 +132,11 @@ jserl_send(JSContext* cx, uintN argc, jsval* vp)
     assert(vm != NULL && "Context has no vm.");
     
     env = enif_alloc_env();
-    mesg = vm_mk_message(env, to_erl(env, cx, argv[0]));
+    callback = vm_mk_callback(env, to_erl(env, cx, argv[0]));
 
     // If pid is not alive, raise an error.
     // XXX: Can I make this uncatchable?
-    if(!enif_send(NULL, &(vm->curr_job->pid), env, mesg))
+    if(!enif_send(NULL, &(vm->pid), env, callback))
     {
         JS_ReportError(cx, "Context closing.");
         return JS_FALSE;
@@ -153,7 +151,7 @@ jserl_send(JSContext* cx, uintN argc, jsval* vp)
         return JS_FALSE;
     }
     
-    assert(job->type == job_response && "Invalid message response.");
+    assert(job->type == job_result && "Invalid message response.");
     
     JS_SET_RVAL(cx, vp, to_js(job->env, cx, job->args));
     job_destroy(job);
@@ -172,7 +170,7 @@ install_jserl(JSContext* cx, JSObject* gl)
         return 0;
     }
     
-    if(!JS_DefineFunction(cx, obj, "send", jserl_send, 1,
+    if(!JS_DefineFunction(cx, obj, "call", jserl_call, 1,
                         JSPROP_ENUMERATE | JSPROP_READONLY | JSPROP_PERMANENT))
     {
         return 0;
@@ -192,11 +190,12 @@ install_jserl(JSContext* cx, JSObject* gl)
 //
 
 vm_ptr
-vm_init(ErlNifResourceType* res_type, JSRuntime* runtime, size_t stack_size)
+vm_init(ErlNifResourceType* res_type, JSRuntime* runtime, size_t stack_size, ENPID pid)
 {
     vm_ptr vm = (vm_ptr) enif_alloc_resource(res_type, sizeof(struct vm_t));
     if(vm == NULL) return NULL;
 
+    vm->pid = pid;
     vm->runtime = runtime;
     vm->curr_job = NULL;
     vm->stack_size = stack_size;
@@ -314,7 +313,7 @@ vm_run(void* arg)
         JS_MaybeGC(cx);
 
         // XXX: If pid is not alive, we just ignore it.
-        enif_send(NULL, &(job->pid), job->env, resp);
+        enif_send(NULL, &(vm->pid), job->env, resp);
 
         job_destroy(job);
     }
@@ -326,14 +325,12 @@ done:
 }
 
 int
-vm_add_eval(vm_ptr vm, ENTERM ref, ENPID pid, ENBINARY bin)
+vm_add_eval(vm_ptr vm, ENBINARY bin)
 {
     job_ptr job = job_create();
 
     job->type = job_eval;
-    job->ref = enif_make_copy(job->env, ref);
-    job->pid = pid;
-    
+
     if(!enif_alloc_binary(bin.size, &(job->script))) goto error;
     memcpy(job->script.data, bin.data, bin.size);
 
@@ -347,14 +344,12 @@ error:
 }
 
 int
-vm_add_call(vm_ptr vm, ENTERM ref, ENPID pid, ENTERM name, ENTERM args)
+vm_add_call(vm_ptr vm, ENTERM name, ENTERM args)
 {
     job_ptr job = job_create();
     if(job == NULL) goto error;
 
     job->type = job_call;
-    job->ref = enif_make_copy(job->env, ref);
-    job->pid = pid;
     job->name = enif_make_copy(job->env, name);
     job->args = enif_make_copy(job->env, args);
 
@@ -367,12 +362,12 @@ error:
 }
 
 int
-vm_send(vm_ptr vm, ENTERM data)
+vm_add_result(vm_ptr vm, ENTERM data)
 {
     job_ptr job = job_create();
     if(job == NULL) goto error;
     
-    job->type = job_response;
+    job->type = job_result;
     job->args = enif_make_copy(job->env, data);
     
     if(!queue_send(vm->jobs, job)) goto error;
@@ -417,7 +412,7 @@ vm_eval(JSContext* cx, JSObject* gl, job_ptr job)
         resp = vm_mk_ok(job->env, to_erl(job->env, cx, rval));
     }
 
-    return enif_make_tuple2(job->env, job->ref, resp);
+    return enif_make_tuple2(job->env, util_mk_atom(job->env, "emonk_response"), resp);
 }
 
 ENTERM
@@ -497,7 +492,7 @@ vm_call(JSContext* cx, JSObject* gl, job_ptr job)
     }
 
 send:
-    return enif_make_tuple2(job->env, job->ref, resp);
+    return enif_make_tuple2(job->env, util_mk_atom(job->env, "emonk_response"), resp);
 }
 
 void
@@ -551,8 +546,8 @@ vm_mk_error(ErlNifEnv* env, ENTERM reason)
 }
 
 ENTERM
-vm_mk_message(ErlNifEnv* env, ENTERM data)
+vm_mk_callback(ErlNifEnv* env, ENTERM data)
 {
-    ENTERM message = util_mk_atom(env, "message");
-    return enif_make_tuple2(env, message, data);
+    ENTERM callback = util_mk_atom(env, "emonk_callback");
+    return enif_make_tuple2(env, callback, data);
 }
