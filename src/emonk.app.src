@@ -1,8 +1,8 @@
 %% -*- erlang -*-
 {application, emonk,
  [
-  {description, ""},
-  {vsn, "1"},
+  {description, "Emonk - JavaScript bindings for Erlang"},
+  {vsn, git},
   {registered, []},
   {applications, [
                   kernel,
