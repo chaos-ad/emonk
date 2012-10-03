@@ -50,4 +50,5 @@ util_debug_jsval(JSContext* cx, jsval val)
     }
     
     fprintf(stderr, "%s\n", bytes);
+    JS_free(cx, bytes);
 }

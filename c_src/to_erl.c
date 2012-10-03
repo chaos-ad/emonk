@@ -36,6 +36,7 @@ to_erl_string(ErlNifEnv* env, JSContext* cx, jsval val, ERL_NIF_TERM* term)
     }
 
     memcpy(bin.data, data, len);
+    JS_free(cx, data);
     *term = enif_make_binary(env, &bin);
     return OK;
 }
