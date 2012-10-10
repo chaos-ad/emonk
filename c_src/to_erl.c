@@ -22,7 +22,7 @@ to_erl_string(ErlNifEnv* env, JSContext* cx, jsval val, ERL_NIF_TERM* term)
 {
     JSString *str;
     ErlNifBinary bin;
-    const char* data;
+    char* data;
     size_t len;
 
     str = JS_ValueToString(cx, val);

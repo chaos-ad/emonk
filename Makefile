@@ -1,4 +1,4 @@
-APP=moon
+APP=emonk
 REBAR ?= $(shell which rebar 2>/dev/null || which ./rebar)
 
 .PHONY: test
