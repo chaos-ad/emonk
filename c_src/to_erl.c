@@ -179,7 +179,8 @@ to_erl_intern(ErlNifEnv* env, JSContext* cx, jsval val, ERL_NIF_TERM* term)
     }
     else if(val == JSVAL_VOID)
     {
-        return ERROR;
+        // return ERROR;
+        return to_erl_atom(env, "undefined", term);
     }
     else if(type == JSTYPE_BOOLEAN)
     {

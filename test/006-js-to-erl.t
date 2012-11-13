@@ -5,7 +5,7 @@
 
 main(_) ->
     emonk:start(),
-    test_util:run(30, fun() -> test() end),
+    test_util:run(33, fun() -> test() end),
     emonk:stop().
 
 test() ->
@@ -61,7 +61,8 @@ test() ->
         }
     ],
     ok = run_tests(Ctx, Tests),
-    test_converter(Ctx).
+    test_converter(Ctx),
+    test_undefined(Ctx).
 
 run_tests(_, []) ->
     ok;
@@ -78,6 +79,18 @@ test_converter(Ctx) ->
     {ok, Result} = emonk:eval(Ctx, js(Date)),
     etap:is(sort(Result), [{[{<<"foo">>, 2.1}]}], "Is toJSON called?"),
     ok.
+
+test_undefined(Ctx) ->
+    Obj = {[{<<"one">>,1},{<<"two">>,undefined},{<<"three">>,3}]},
+    {ok, undefined} = emonk:eval(Ctx, <<"function test(arg) { return arg; }">>),
+    {ok, undefined} = emonk:eval(Ctx, <<"function print(arg) { return JSON.stringify(arg); }">>),
+
+    {ok, Res1} = emonk:call(Ctx, test, [Obj]),
+    {ok, Res2} = emonk:call(Ctx, print, [Obj]),
+    {ok, Res3} = emonk:eval(Ctx, <<"(function() { return {one:1, two:undefined, three:3}; })();">>),
+    etap:is(sort(Obj), sort(Res1), "Is undefined is passed in correctly"),
+    etap:is(<<"{\"one\":1,\"three\":3}">>, Res2, "Is undefined is passed in correctly"),
+    etap:is(sort(Obj), sort(Res3), "Is undefined is passed out correctly").
 
 js(Arg) -> <<"(function(arg) {return [arg];})(", Arg/binary, ");">>.
 

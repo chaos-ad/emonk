@@ -27,6 +27,10 @@ to_js_special(ErlNifEnv* env, JSContext* cx, ERL_NIF_TERM term)
     {
         return JSVAL_NULL;
     }
+    else if(strcmp(atom, "undefined") == 0)
+    {
+        return JSVAL_VOID;
+    }
     else
     {
         str = JS_NewStringCopyZ(cx, atom);
@@ -172,7 +176,7 @@ to_js_object(ErlNifEnv* env, JSContext* cx, ERL_NIF_TERM list)
         if(kval == JSVAL_VOID) return JSVAL_VOID;
         if(!JS_ValueToId(cx, kval, &idp)) return JSVAL_VOID;
         vval = to_js(env, cx, pair[1]);
-        if(vval == JSVAL_VOID) return JSVAL_VOID;
+//         if(vval == JSVAL_VOID) return JSVAL_VOID;
         
         if(!JS_SetPropertyById(cx, ret, idp, &vval))
         {
